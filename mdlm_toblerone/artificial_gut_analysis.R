@@ -5,6 +5,7 @@ library(stringr)
 library(lubridate)
 library(compositions)
 library(philr)
+# devtools::install_github("jrnold/ssmodels-in-stan/StanStateSpace")
 library(StanStateSpace)
 library(padr)
 library(ggrepel)
@@ -14,7 +15,7 @@ library(ape)
 library(ggtree)
 library(ggtern)
 library(ks)
-library(ggjoy)
+library(ggridges)
 library(shapes)
 # Requires driver (github.com/jsilve24/driver) be installed
 library(driver)
@@ -32,18 +33,18 @@ options(mc.cores = parallel::detectCores())
 # 
 # creating_better_family_tree/ is searched for in the "base" directory.
 # Working path is set to "results".  
-machine <- "hardac"
+machine <- "local"
 paths <- list()
-paths[["local"]] <- list("base" = "~/Research/mdlm/results/2018-03-21_publication_2/",
-                        "results" = "~/Research/mdlm/results/2018-03-21_publication_2/",
+paths[["local"]] <- list("base" = "~/Research/mdlm/results/2018-04-18_code_github/",
+                        "results" = "~/Research/mdlm/results/2018-04-18_code_github/mdlm_toblerone/",
                         "mapping" = '~/Research/data/_data_raw/sequencing.2016.03.04/2016.03.25MappingFile.MergedPool.txt',
                         "dada2"= "~/Research/data/_data_derived/sequencing.2016.03.04/dada2_2016_10_18/hardac/",
                         "runnotes" = "~/Research/data/_data_raw/sequencing.2016.03.04/2017.10.26_ResearcherIdentity.csv")
-paths[["hardac"]] <- list("base"="/data/davidlab/users/jds/mdlm_publication_2/",
-                          "results" = "/data/davidlab/users/jds/mdlm_publication_2/mdlm_toblerone/",
-                          "mapping" = '/data/davidlab/users/jds/mdlm_publication_2/dada2/0_mapping/2016.03.25MappingFile.MergedPool.txt',
-                          "dada2" = "/data/davidlab/users/jds/mdlm_publication_2/dada2/", 
-                          "runnotes" = '/data/davidlab/users/jds/mdlm_publication_2/runnotes/2017.10.26_ResearcherIdentity.csv')
+# paths[["hardac"]] <- list("base"="/data/davidlab/users/jds/mdlm_publication_2/",
+#                           "results" = "/data/davidlab/users/jds/mdlm_publication_2/mdlm_toblerone/",
+#                           "mapping" = '/data/davidlab/users/jds/mdlm_publication_2/dada2/0_mapping/2016.03.25MappingFile.MergedPool.txt',
+#                           "dada2" = "/data/davidlab/users/jds/mdlm_publication_2/dada2/", 
+#                           "runnotes" = '/data/davidlab/users/jds/mdlm_publication_2/runnotes/2017.10.26_ResearcherIdentity.csv')
 
 setwd(paths[[machine]]$results)
 
@@ -709,12 +710,13 @@ o <- names(tax) %>%
 
 tax <- factor(tax, levels = tax[names(tax)[o]])
 
-families <- as.data.frame(tax_table(ps))
+families <- as.data.frame(as(tax_table(ps), "matrix"))
 families <- as.character(families$Family) %>% 
   setNames(rownames(families))
 
 tree <- phy_tree(ps)
 tree$tip.label <- families[tree$tip.label]
+tree$edge.length <- rep(NULL, nrow(tree$edge))
 V.tmp <- contrast.matrix.sbp
 rownames(V.tmp) <- families[rownames(V.tmp)]
 p.tree <- ggtree(tree) + 
@@ -731,6 +733,9 @@ p.tree <- annotate_sbp(tree, V.tmp, p.tree, sep="\n")
 p <- tidy_fit %>%
   filter(parameter == "theta") %>% 
   mutate(dim_1 = tt.sample[dim_1]) %>% # Name dates accordingly
+  mutate(dim_3=factor(dim_3, levels=c("n12", "n15", "n16", 
+                                      "n2", "n13", "n14", 
+                                      "n1", "n3", "n10"))) %>% # Order facets
   ggplot(aes(x=dim_1, y=mean)) +
   geom_ribbon(aes(ymax=p97.5, ymin=p2.5, fill = factor(dim_2)), alpha=0.5) +
   #geom_line(color="blue") +
@@ -755,6 +760,9 @@ p <- tidy_fit %>%
   filter(parameter == "theta") %>% 
   mutate(dim_1 = tt.sample[dim_1]) %>% # Name dates accordingly
   filter(dim_1 %in% tt.hourly) %>% 
+  mutate(dim_3=factor(dim_3, levels=c("n12", "n15", "n16", 
+                                      "n2", "n13", "n14", 
+                                      "n1", "n3", "n10"))) %>% # Order facets
   #filter(dim_3 == "n12") %>% 
   ggplot(aes(x=dim_1, y=mean)) +
   geom_ribbon(aes(ymax=p97.5, ymin=p2.5, fill = factor(dim_2)), alpha=0.5) +
@@ -2423,6 +2431,69 @@ p <- ggplot(enframe(logit(null.dist)), aes(x=value)) +
   ggtitle("Comparing Correlation Matricies W and V", "Using Riemmanian Distance")
 ggsave(out("comparing_corr_riemmanian_distance.pdf"), plot=p, height=3, width=5, units="in")
 
+
+# PhILR PCoA  -------------------------------------------------------------
+
+# Create a version of Y that is easier to work with for PCoA
+Yperm <- aperm(Y, c(3, 2, 1))
+d <- dim(Yperm)
+meta <- data.frame(R=rep(1:d[2], times=d[3]), 
+                   tt=rep(1:d[3], each=d[2]))
+Yperm <- t(matrix(Yperm, d[1], prod(d[-1])))
+colnames(Yperm) <- taxa_names(ps)
+
+# Convert to philr basis with pseudocount
+Ypp <- philr(Yperm+0.65, phy_tree(ps))
+
+# Calculate distance (aitchison distance)
+daitch <- as.matrix(dist(Ypp))
+
+# Calculate pcoa decomposition
+decomp <- ape::pcoa(daitch)
+
+# Get Batch info
+tmp <- select(sample_data(ps), time, Vessel, batch) %>% 
+  mutate(R = as.integer(Vessel)) %>% 
+  rename(Time=time) %>% 
+  mutate( R = paste("Vessel", R))
+
+# Combine data together prior for plotting
+meta <- meta %>% 
+  cbind(decomp$vectors[,1:2]) %>% 
+  mutate(replicate=duplicated(tt.observed)[tt], 
+         observed=Y.obs[cbind(tt, R)], 
+         Time=tt.observed[tt], 
+         R = paste("Vessel", R)) %>% 
+  filter(observed==TRUE) %>%
+  left_join(tmp, by=c("Time", "R")) %>% 
+  mutate(Batch=factor(batch))
+
+meta.norep <- filter(meta, replicate==FALSE)
+meta.rep <- filter(meta, replicate==TRUE)
+  
+p <- meta.norep %>% 
+  ggplot(aes(x=Axis.1, y=Axis.2)) +
+  geom_point(aes(color=Time)) +
+  geom_point(data=meta.rep) +
+  facet_wrap(~R) +
+  theme_bw() +
+  xlab(paste0("Axis 1 [", 100*signif(decomp$values$Relative_eig[1], 3), "%]")) +
+  ylab(paste0("Axis 2 [", 100*signif(decomp$values$Relative_eig[2], 3), "%]")) +
+  scale_colour_datetime(date_labels="Day %d", low="#5CAFF3", high="#2A4C6F")
+ggsave(out("pcoa_aitchison_time.pdf"), plot=p, width=7.5, height=5, units="in")
+
+
+p <- meta.norep %>% 
+  mutate(Batch=factor(batch)) %>% 
+  ggplot(aes(x=Axis.1, y=Axis.2)) +
+  geom_point(aes(color=Batch)) +
+  geom_point(data=meta.rep, aes(color=Batch)) +
+  facet_wrap(~R) +
+  theme_bw() +
+  xlab(paste0("Axis 1 [", 100*signif(decomp$values$Relative_eig[1], 3), "%]")) +
+  ylab(paste0("Axis 2 [", 100*signif(decomp$values$Relative_eig[2], 3), "%]")) +
+  scale_color_brewer(palette = "Set1")
+ggsave(out("pcoa_aitchison_batch.pdf"), plot=p, width=7, height=5, units="in")
 
 # Original Computing Environment ------------------------------------------
 

@@ -15,9 +15,9 @@ rstan_options(auto_write = TRUE)
 options(mc.cores = parallel::detectCores())
 
 
-machine <- "hardac"
+machine <- "local"
 paths <- list()
-paths[["local"]] <- list("results" = "~/Research/mdlm/results/2018-03-21_publication_2/",
+paths[["local"]] <- list("results" = "~/Research/mdlm/results/2018-04-18_code_github/mdlm_toblerone/",
                         "mapping" = '~/Research/data/_data_raw/sequencing.2016.03.04/2016.03.25MappingFile.MergedPool.txt',
                         "phyloseq"= "~/Research/data/_data_derived/sequencing.2016.03.04/dada2_2016_10_18/hardac/phyloseq.rds")
 paths[["hardac"]] <- list("results" = "/data/davidlab/users/jds/mdlm_publication_2/mdlm_toblerone/",
@@ -395,7 +395,7 @@ p <- tidy_fit %>%
   filter(parameter =="eta") %>%
   mutate(dim_1 = tt.observed.longitudinal[dim_1]) %>% # Name dates accordingly
   ggplot(aes(x=dim_1, y=mean)) +
-  geom_line(data=tidy_theta_true, color=cbPalette[3], size=1.5) + 
+  geom_line(data=tidy_eta_true, color=cbPalette[3], size=1.5) + 
   geom_line(data=eta_ml, color=cbPalette[1]) +
   geom_ribbon(aes(ymax=p97.5, ymin=p2.5),fill=cbPalette[4], alpha=0.5) +
   geom_line(color=cbPalette[2], size=1) +
