@@ -2471,6 +2471,15 @@ meta <- meta %>%
 meta.norep <- filter(meta, replicate==FALSE)
 meta.rep <- filter(meta, replicate==TRUE)
   
+scale_colour_datetime <- function (..., low = "#132B43", high = "#56B1F7", mid="blue", space = "Lab", 
+                                   na.value = "grey50", guide = "colourbar") 
+{
+  ggplot2:::datetime_scale("colour", "time", 
+                           palette = scales::div_gradient_pal(low,mid, 
+                                                              high, space), 
+                           na.value = na.value, guide = guide, ...)
+}
+
 p <- meta.norep %>% 
   ggplot(aes(x=Axis.1, y=Axis.2)) +
   geom_point(aes(color=Time)) +
@@ -2479,7 +2488,8 @@ p <- meta.norep %>%
   theme_bw() +
   xlab(paste0("Axis 1 [", 100*signif(decomp$values$Relative_eig[1], 3), "%]")) +
   ylab(paste0("Axis 2 [", 100*signif(decomp$values$Relative_eig[2], 3), "%]")) +
-  scale_colour_datetime(date_labels="Day %d", low="#5CAFF3", high="#2A4C6F")
+  scale_colour_datetime(date_labels="Day %d", low="green", high="black", mid="red", 
+                        rescaler=ggplot2:::mid_rescaler(mid=as.integer(ymd_hms("2015-11-16 15:00:00"))))
 ggsave(out("pcoa_aitchison_time.pdf"), plot=p, width=7.5, height=5, units="in")
 
 
