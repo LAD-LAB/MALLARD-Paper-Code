@@ -2495,6 +2495,20 @@ p <- meta.norep %>%
   scale_color_brewer(palette = "Set1")
 ggsave(out("pcoa_aitchison_batch.pdf"), plot=p, width=7, height=5, units="in")
 
+
+p <- meta.norep %>% 
+  mutate(Batch=factor(batch)) %>% 
+  mutate(R = str_extract(R, "[:digit:]")) %>% 
+  mutate(Vessel=R) %>% 
+  ggplot(aes(x=Axis.1, y=Axis.2)) +
+  geom_point(aes(color=Vessel)) +
+  xlab(paste0("Axis 1 [", 100*signif(decomp$values$Relative_eig[1], 3), "%]")) +
+  ylab(paste0("Axis 2 [", 100*signif(decomp$values$Relative_eig[2], 3), "%]")) +
+  theme_bw() +
+  scale_color_brewer(palette = "Set1") 
+ggsave(out("pcoa_aitchison_vessels.pdf"), plot=p, width=7, height=3, units="in")
+
+
 # Original Computing Environment ------------------------------------------
 
 devtools::session_info()
